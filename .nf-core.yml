@@ -1,0 +1,56 @@
+repository_type: pipeline
+
+nf_core_version: 3.3.2
+
+lint:
+  files_unchanged:
+    - .prettierignore
+    - .prettierignore
+    - .prettierignore
+    - CODE_OF_CONDUCT.md
+    - assets/nf-core-assemble_shortreads_logo_light.png
+    - docs/images/nf-core-assemble_shortreads_logo_light.png
+    - docs/images/nf-core-assemble_shortreads_logo_dark.png
+    - .github/ISSUE_TEMPLATE/bug_report.yml
+    - .github/CONTRIBUTING.md
+    - .github/PULL_REQUEST_TEMPLATE.md
+    - assets/email_template.txt
+    - docs/README.md
+  nextflow_config:
+    - manifest.name
+    - manifest.homePage
+    - validation.help.beforeText
+    - validation.help.afterText
+    - validation.summary.beforeText
+    - validation.summary.afterText
+  multiqc_config:
+    - report_comment
+  files_exist:
+    - conf/igenomes.config
+    - conf/igenomes_ignored.config
+    - CODE_OF_CONDUCT.md
+    - assets/nf-core-assemble_shortreads_logo_light.png
+    - docs/images/nf-core-assemble_shortreads_logo_light.png
+    - docs/images/nf-core-assemble_shortreads_logo_dark.png
+    - .github/ISSUE_TEMPLATE/config.yml
+    - .github/workflows/awstest.yml
+    - .github/workflows/awsfulltest.yml
+
+template:
+  org: gcf
+  name: assemble_shortreads
+  description: a nextflow pipeline for de-novo assembly of small genomes using the
+    illumina short-read sequencing data
+  author: bioinf2305
+  version: 1.0.0dev
+  force: true
+  outdir: .
+  skip_features:
+    - igenomes
+    - seqera_platform
+    - gpu
+    - vscode
+    - rocrate
+    - adaptivecard
+    - slackreport
+  is_nfcore: false
