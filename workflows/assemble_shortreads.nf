@@ -3,12 +3,24 @@
     IMPORT MODULES / SUBWORKFLOWS / FUNCTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include { FASTQC                 } from '../modules/nf-core/fastqc/main'
-include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { paramsSummaryMap       } from 'plugin/nf-schema'
-include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_assemble_shortreads_pipeline'
+include { FASTQC                               } from '../modules/nf-core/fastqc/main'
+include { FASTQC as ADAPTERFILTERFASTQC        } from '../modules/nf-core/fastqc/main'
+include { FASTQC as DEDUPFASTQC                } from '../modules/nf-core/fastqc/main'
+include { FASTQC as REPAIREDFASTQC             } from '../modules/nf-core/fastqc/main'
+include { MULTIQC                              } from '../modules/nf-core/multiqc/main'
+include { BBMAP_BBDUK                          } from '../modules/nf-core/bbmap/bbduk/main'
+include { BBMAP_REPAIR                         } from '../modules/nf-core/bbmap/repair/main'
+include { FASTP                                } from '../modules/nf-core/fastp/main'
+include { PARDRE                               } from '../modules/local/pardre/main'
+include { SPADES                               } from '../modules/nf-core/spades/main'
+include { BWAMEM2_INDEX                        } from '../modules/nf-core/bwamem2/index/main'
+include { BWAMEM2_MEM                          } from '../modules/nf-core/bwamem2/mem/main'
+include { SAMTOOLS_CONSENSUS                   } from '../modules/nf-core/samtools/consensus/main'
+include { QUAST                                } from '../modules/nf-core/quast/main'
+include { paramsSummaryMap                     } from 'plugin/nf-schema'
+include { paramsSummaryMultiqc                 } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { softwareVersionsToYAML               } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { methodsDescriptionText               } from '../subworkflows/local/utils_nfcore_assemble_shortreads_pipeline'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -32,6 +44,166 @@ workflow ASSEMBLE_SHORTREADS {
     )
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
     ch_versions = ch_versions.mix(FASTQC.out.versions.first())
+
+    // read adapter fasta files 
+
+    fasta_adapter=Channel.fromPath(params.reference_adapter_fas,checkIfExists: true)
+    
+    // prepare input channel for bbmap adapter trimming
+
+    prech_adapter_files = ch_samplesheet.combine(fasta_adapter)
+
+
+    prech_adapter_files.multiMap{meta,reads,fasta ->
+        //first_ch: tuple(meta, reads)
+        first_ch: tuple([id:meta.id+"_adapter_filtered"]+[single_end:false], reads)
+        second_ch: fasta
+        }.set{ ch_adapter_files }
+
+    //ch_adapter_files.first_ch.view()
+    if(params.filtering_tool == "bbduk"){
+        //
+        // MODULE: BBMAP_BBDUK
+        //
+        BBMAP_BBDUK(
+            ch_adapter_files.first_ch,
+            ch_adapter_files.second_ch
+         )
+        ch_multiqc_files = ch_multiqc_files.mix(BBMAP_BBDUK.out.log.collect{it[1]})
+        ch_versions = ch_versions.mix(BBMAP_BBDUK.out.versions.first())
+        ch_adapter_fastqc = BBMAP_BBDUK.out.reads
+    }
+
+    else{
+        //
+        // MODULE: FASTP
+        //
+        FASTP(
+            ch_adapter_files.first_ch,
+            ch_adapter_files.second_ch,
+            Channel.value(false),
+            Channel.value(false),
+            Channel.value(false)
+        )
+        ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json.collect{it[1]})
+        ch_versions = ch_versions.mix(FASTP.out.versions.first())
+        ch_adapter_fastqc = FASTP.out.reads
+        }
+
+        //
+        // MODULE: ADAPTER_FILTER_FASTQC
+        //
+        ADAPTERFILTERFASTQC(
+            ch_adapter_fastqc
+        )
+
+        ch_multiqc_files = ch_multiqc_files.mix(ADAPTERFILTERFASTQC.out.zip.collect{it[1]})
+
+        //
+        // MODULE : PARDRE
+        //
+        PARDRE(
+            ch_adapter_fastqc
+        )
+        
+        ch_versions = ch_versions.mix(PARDRE.out.versions.first())
+
+        prech_pardre_reads = PARDRE.out.reads
+
+        prech_pardre_reads.map{
+            meta,reads ->tuple([id:meta.id+"_dedup_pardre"]+[single_end:false], reads)
+        }.set{ ch_pardre_reads }
+
+        //
+        //MODULE: DEDUPFASTQC
+        //
+        DEDUPFASTQC(
+            ch_pardre_reads
+        )
+
+        ch_multiqc_files = ch_multiqc_files.mix(DEDUPFASTQC.out.zip.collect{it[1]})
+    
+
+        //
+        //MODULE: BBMAP_REPAIR
+        //
+        BBMAP_REPAIR(
+            ch_pardre_reads,
+            channel.value(false)
+        )
+
+        BBMAP_REPAIR.out.repaired.map{
+            meta,reads->tuple([id:meta.id+"_repaired"]+[single_end:false],reads)
+        }.set{ch_bbmap_repaired_reads}
+
+        //
+        //MODULE: REPAIREDFASTQC
+        //
+        REPAIREDFASTQC(
+            ch_bbmap_repaired_reads
+        )
+        ch_multiqc_files = ch_multiqc_files.mix(REPAIREDFASTQC.out.zip.collect{it[1]})
+
+        //
+        //MODULE: SPADES
+        //
+        SPADES(
+            ch_bbmap_repaired_reads.map{meta,reads->tuple(meta,reads,[],[])},
+            [],
+            []
+        )
+
+        if(params.reference_fasta){
+
+            reference_fasta = Channel.fromPath(params.reference_fasta)
+            ch_bwamem2_index = reference_fasta.map{fasta->tuple([id:"reference"],fasta)}
+
+            //
+            //MODULE: BWAMEM2_INDEX
+            //
+
+                BWAMEM2_INDEX(
+                    ch_bwamem2_index
+                )
+
+                prech_bwamem2_mem = ch_bbmap_repaired_reads.combine(ch_bwamem2_index.join(BWAMEM2_INDEX.out.index))
+
+                prech_bwamem2_mem.multiMap{ meta, reads, meta2, ref, refindex -> 
+                    first_ch: tuple(meta,reads)
+                    second_ch: tuple(meta2,ref)
+                    third_ch: tuple(meta2,refindex)
+                }.set{ch_bwamem2_mem}
+
+            //
+            //MODULE: BWAMEM2_MEM
+            //
+
+            BWAMEM2_MEM(
+                ch_bwamem2_mem.first_ch,
+                ch_bwamem2_mem.second_ch,
+                ch_bwamem2_mem.third_ch,
+                channel.value(true)
+            )
+
+            //
+            //MODULE: SAMTOOLS_CONSENSUS
+            //
+
+            SAMTOOLS_CONSENSUS(
+                BWAMEM2_MEM.out.bam
+            )
+        
+        }
+
+        prech_quast = SPADES.out.scaffolds.map{meta,assembly->assembly}.collect()
+
+        ch_quast = prech_quast.map{assemblies->tuple([id:"consensus"],assemblies)}
+
+        QUAST(
+            ch_quast,
+            [[],[]],
+            [[],[]]
+        )
 
     //
     // Collate and save software versions

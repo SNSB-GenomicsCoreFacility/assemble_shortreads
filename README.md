@@ -11,80 +11,88 @@
 [![run with singularity](https://img.shields.io/badge/run%20with-singularity-1d355c.svg?labelColor=000000)](https://sylabs.io/docs/)
 [![Launch on Seqera Platform](https://img.shields.io/badge/Launch%20%F0%9F%9A%80-Seqera%20Platform-%234256e7)](https://cloud.seqera.io/launch?pipeline=https://github.com/gcf/assemble_shortreads)
 
-## Introduction
+# De-novo Genome Assembly Pipeline (Nextflow)
 
-**gcf/assemble_shortreads** is a bioinformatics pipeline that ...
+This Nextflow pipeline performs **de-novo genome assembly** from **paired-end FASTQ files**, using a sequence of filtering, trimming, assembly, and quality control steps. The pipeline leverages the SPAdes assembler and supports optional consensus sequence generation when a reference genome is provided.
 
-<!-- TODO nf-core:
-   Complete this sentence with a 2-3 sentence summary of what types of data the pipeline ingests, a brief overview of the
-   major pipeline sections and the types of output it produces. You're giving an overview to someone new
-   to nf-core here, in 15-20 seconds. For an example, see https://github.com/nf-core/rnaseq/blob/master/README.md#introduction
--->
+---
 
-<!-- TODO nf-core: Include a figure that guides the user through the major workflow steps. Many nf-core
-     workflows use the "tube map" design for that. See https://nf-co.re/docs/guidelines/graphic_design/workflow_diagrams#examples for examples.   -->
-<!-- TODO nf-core: Fill in short bullet-pointed list of the default steps in the pipeline -->1. Read QC ([`FastQC`](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/))2. Present QC for raw reads ([`MultiQC`](http://multiqc.info/))
+## 📦 Overview
 
-## Usage
+This pipeline processes paired-end sequencing reads and outputs high-quality de-novo assemblies along with extensive quality metrics and reports. Key steps include:
 
-> [!NOTE]
-> If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data.
+- Adapter trimming and quality filtering
+- Duplicate read removal
+- Repairing of FASTQ pairing
+- Genome assembly using SPAdes
+- Quality assessment of assemblies with QUAST
+- Quality checks using FastQC at each stage
+- Aggregated reporting via MultiQC
+- Consensus sequence generation (optional, requires reference genome)
 
-<!-- TODO nf-core: Describe the minimum required steps to execute the pipeline, e.g. how to prepare samplesheets.
-     Explain what rows and columns represent. For instance (please edit as appropriate):
+---
 
-First, prepare a samplesheet with your input data that looks as follows:
+## 🧬 Input Format
 
-`samplesheet.csv`:
+The input should be provided as a CSV file (e.g., `input.csv`) with the following structure:
 
 ```csv
 sample,fastq_1,fastq_2
-CONTROL_REP1,AEG588A1_S1_L002_R1_001.fastq.gz,AEG588A1_S1_L002_R2_001.fastq.gz
-```
+SRR1785701,/data/projects/snsb/de_nov_assembly_reads/e_coli/SRR1785701_1.fastq.gz,/data/projects/snsb/de_nov_assembly_reads/e_coli/SRR1785701_2.fastq.gz
+SRR3584989,/data/projects/snsb/de_nov_assembly_reads/e_coli/SRR3584989_1.fastq.gz,/data/projects/snsb/de_nov_assembly_reads/e_coli/SRR3584989_2.fastq.gz
 
-Each row represents a fastq file (single-end) or a pair of fastq files (paired end).
 
--->
+Each line represents a sample with its corresponding paired-end FASTQ files.
 
-Now, you can run the pipeline using:
+---
 
-<!-- TODO nf-core: update the following command to include all required parameters for a minimal example -->
+## ⚙️ Step-by-Step Pipeline Breakdown
+
+1. **Adapter Trimming & Quality Filtering**
+   - Tools: `bbmap` or `fastp`
+   - Filters based on:
+     - Adapter content
+     - Minimum average base quality
+     - Minimum read length
+
+2. **Duplicate Read Removal**
+   - Tool: `pardre`
+
+3. **FASTQ Repair**
+   - Tool: `bbmap`
+   - Ensures paired-end reads are synchronized
+
+4. **De-novo Assembly**
+   - Tool: `SPAdes`
+   - Assembles filtered reads into contigs
+
+5. **Assembly Quality Metrics**
+   - Tool: `QUAST`
+   - Evaluates assembly statistics and contiguity
+
+6. **Quality Control**
+   - Tool: `FastQC`
+   - Run **after every filtering step**
+
+7. **Summary Reporting**
+   - Tool: `MultiQC`
+   - Aggregates all QC and assembly reports into one
+
+8. **Consensus Sequence Generation** (Optional)
+   - Tools: `bwamem2`, `samtools`
+   - Requires a reference genome
+   - Aligns reads to the reference and generates consensus sequences
+
+---
+
+## 🚀 How to Run
+
+Run the pipeline using the following command:
 
 ```bash
-nextflow run gcf/assemble_shortreads \
-   -profile <docker/singularity/.../institute> \
-   --input samplesheet.csv \
-   --outdir <OUTDIR>
-```
+nextflow assemble_shortreads/ \
+  --input input.csv \
+  --outdir ./test_run \
+  -profile mamba \
+  -resume
 
-> [!WARNING]
-> Please provide pipeline parameters via the CLI or Nextflow `-params-file` option. Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration _**except for parameters**_; see [docs](https://nf-co.re/docs/usage/getting_started/configuration#custom-configuration-files).
-
-## Credits
-
-gcf/assemble_shortreads was originally written by bioinf2305.
-
-We thank the following people for their extensive assistance in the development of this pipeline:
-
-<!-- TODO nf-core: If applicable, make list of people who have also contributed -->
-
-## Contributions and Support
-
-If you would like to contribute to this pipeline, please see the [contributing guidelines](.github/CONTRIBUTING.md).
-
-## Citations
-
-<!-- TODO nf-core: Add citation for pipeline after first release. Uncomment lines below and update Zenodo doi and badge at the top of this file. -->
-<!-- If you use gcf/assemble_shortreads for your analysis, please cite it using the following doi: [10.5281/zenodo.XXXXXX](https://doi.org/10.5281/zenodo.XXXXXX) -->
-
-<!-- TODO nf-core: Add bibliography of tools and data used in your pipeline -->
-
-An extensive list of references for the tools used by the pipeline can be found in the [`CITATIONS.md`](CITATIONS.md) file.
-
-This pipeline uses code and infrastructure developed and maintained by the [nf-core](https://nf-co.re) community, reused here under the [MIT license](https://github.com/nf-core/tools/blob/main/LICENSE).
-
-> **The nf-core framework for community-curated bioinformatics pipelines.**
->
-> Philip Ewels, Alexander Peltzer, Sven Fillinger, Harshil Patel, Johannes Alneberg, Andreas Wilm, Maxime Ulysse Garcia, Paolo Di Tommaso & Sven Nahnsen.
->
-> _Nat Biotechnol._ 2020 Feb 13. doi: [10.1038/s41587-020-0439-x](https://dx.doi.org/10.1038/s41587-020-0439-x).

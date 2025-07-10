@@ -5,6 +5,34 @@
     "description": "a nextflow pipeline for de-novo assembly of small genomes using the illumina short-read sequencing data",
     "type": "object",
     "$defs": {
+        "bbmap_bbduk_options": {
+            "title": "bbmap_bbduk options",
+            "type": "object",
+            "description": "Set the paramters for adapter trimming using bbmap_bbduk",
+            "default": "",
+            "properties": {
+                "ktrim": {
+                    "type": "string",
+                    "default": "r"
+                },
+                "k": {
+                    "type": "integer",
+                    "default": 23
+                },
+                "hdist": {
+                    "type": "integer",
+                    "default": 1
+                },
+                "mink": {
+                    "type": "integer",
+                    "default": 11
+                },
+                "extra": {
+                    "type": "string",
+                    "default": "tpe tbo"
+                }
+            }
+        },
         "input_output_options": {
             "title": "Input/output options",
             "type": "object",
@@ -184,6 +212,9 @@
     },
     "allOf": [
         {
+            "$ref": "#/$defs/bbmap_bbduk_options"
+        },
+        {
             "$ref": "#/$defs/input_output_options"
         },
         {
@@ -192,5 +223,53 @@
         {
             "$ref": "#/$defs/generic_options"
         }
-    ]
+    ],
+    "properties": {
+        "reference_fasta": {
+            "type": "string"
+        },
+        "filtering_tool": {
+            "type": "string",
+            "default": "bbduk"
+        },
+        "reference_adapter_fas": {
+            "type": "string",
+            "default": "gcf-assemble_shortreads/assets/adapters_incl_NEBNextmanual.fa"
+        },
+        "qual": {
+            "type": "integer",
+            "default": 30
+        },
+        "minlen": {
+            "type": "integer",
+            "default": 50
+        },
+        "qtrim": {
+            "type": "string",
+            "default": "rl"
+        },
+        "spades_kmer": {
+            "type": "string"
+        },
+        "overrepresentation_analysis": {
+            "type": "boolean",
+            "default": true
+        },
+        "low_complexity_filter": {
+            "type": "boolean",
+            "default": true
+        },
+        "complexity_threshold": {
+            "type": "integer",
+            "default": 50
+        },
+        "dedup": {
+            "type": "boolean",
+            "default": true
+        },
+        "dup_calc_accuracy": {
+            "type": "integer",
+            "default": 6
+        }
+    }
 }
