@@ -13,10 +13,8 @@ include { BBMAP_REPAIR                         } from '../modules/nf-core/bbmap/
 include { FASTP                                } from '../modules/nf-core/fastp/main'
 include { PARDRE                               } from '../modules/local/pardre/main'
 include { SPADES                               } from '../modules/nf-core/spades/main'
-include { BWAMEM2_INDEX                        } from '../modules/nf-core/bwamem2/index/main'
-include { BWAMEM2_MEM                          } from '../modules/nf-core/bwamem2/mem/main'
-include { SAMTOOLS_CONSENSUS                   } from '../modules/nf-core/samtools/consensus/main'
 include { QUAST                                } from '../modules/nf-core/quast/main'
+include { MINIMAP2_ALIGN                       } from '../modules/nf-core/minimap2/align/main'
 include { paramsSummaryMap                     } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc                 } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML               } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -156,42 +154,33 @@ workflow ASSEMBLE_SHORTREADS {
         if(params.reference_fasta){
 
             reference_fasta = Channel.fromPath(params.reference_fasta)
-            ch_bwamem2_index = reference_fasta.map{fasta->tuple([id:"reference"],fasta)}
+            prech_reference_fasta = reference_fasta.map{fasta->tuple([id:"reference"],fasta)}
 
-            //
-            //MODULE: BWAMEM2_INDEX
-            //
+            prech_scaffolds_fasta = SPADES.out.scaffolds.map{meta, scaffolds -> tuple([id:meta.id]+[single_end:"false"],scaffolds)}
 
-                BWAMEM2_INDEX(
-                    ch_bwamem2_index
-                )
+            //MODULE: MINIMAP2_ALIGN
 
-                prech_bwamem2_mem = ch_bbmap_repaired_reads.combine(ch_bwamem2_index.join(BWAMEM2_INDEX.out.index))
 
-                prech_bwamem2_mem.multiMap{ meta, reads, meta2, ref, refindex -> 
-                    first_ch: tuple(meta,reads)
+                prech_minimap2_align = prech_scaffolds_fasta.combine(prech_reference_fasta)
+
+                prech_minimap2_align.multiMap{ meta, scaffolds, meta2, ref -> 
+                    first_ch: tuple(meta,scaffolds)
                     second_ch: tuple(meta2,ref)
-                    third_ch: tuple(meta2,refindex)
-                }.set{ch_bwamem2_mem}
+                }.set{ch_minimap2_align}
 
             //
             //MODULE: BWAMEM2_MEM
             //
 
-            BWAMEM2_MEM(
-                ch_bwamem2_mem.first_ch,
-                ch_bwamem2_mem.second_ch,
-                ch_bwamem2_mem.third_ch,
+            MINIMAP2_ALIGN(
+                ch_minimap2_align.first_ch,
+                ch_minimap2_align.second_ch,
+                channel.value(false),
+                channel.value("bai"),
+                channel.value(true),
                 channel.value(true)
             )
 
-            //
-            //MODULE: SAMTOOLS_CONSENSUS
-            //
-
-            SAMTOOLS_CONSENSUS(
-                BWAMEM2_MEM.out.bam
-            )
         
         }
 
