@@ -15,6 +15,7 @@ include { PARDRE                               } from '../modules/local/pardre/m
 include { SPADES                               } from '../modules/nf-core/spades/main'
 include { QUAST                                } from '../modules/nf-core/quast/main'
 include { MINIMAP2_ALIGN                       } from '../modules/nf-core/minimap2/align/main'
+include { MUMMER                               } from '../modules/nf-core/mummer/main'
 include { paramsSummaryMap                     } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc                 } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML               } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -152,7 +153,35 @@ workflow ASSEMBLE_SHORTREADS {
         )
 
         if(params.reference_fasta){
+            if(params.reference_fasta.endsWith(".map")){
+                    Channel
+                        .fromPath(params.reference_fasta)
+                        .splitCsv(header:true,sep:",")
+                        .map{row ->
+                            tuple([id:row.sample],row.reference)
+                        }
+                        .set{meta_reference}
 
+                    SPADES.out.scaffolds
+                        .map{meta,scaffolds ->
+                            def new_id = meta.id.replaceFirst(/_adapter_filtered_dedup_pardre_repaired$/,'')
+                            def new_meta = [:]
+                            new_meta.id = new_id
+                            [new_meta,scaffolds]
+                        }
+                        .set{nmeta_scaffolds}
+                    
+                    nmeta_scaffolds
+                        .join(meta_reference)
+                        .multiMap{meta,scaffolds,reference ->
+                                 first_ch: tuple(meta,scaffolds)
+                                 second_ch: tuple(meta,reference)
+                        }
+                        .set{ch_minimap2_align}
+
+            }
+
+            else {
             reference_fasta = Channel.fromPath(params.reference_fasta)
             prech_reference_fasta = reference_fasta.map{fasta->tuple([id:"reference"],fasta)}
 
@@ -165,21 +194,43 @@ workflow ASSEMBLE_SHORTREADS {
 
                 prech_minimap2_align.multiMap{ meta, scaffolds, meta2, ref -> 
                     first_ch: tuple(meta,scaffolds)
-                    second_ch: tuple(meta2,ref)
+                    second_ch: tuple(meta,ref)
                 }.set{ch_minimap2_align}
+            }
 
-            //
-            //MODULE: BWAMEM2_MEM
-            //
+            if(params.galignment_tool == "minimap2" ){
 
-            MINIMAP2_ALIGN(
-                ch_minimap2_align.first_ch,
-                ch_minimap2_align.second_ch,
-                channel.value(false),
-                channel.value("bai"),
-                channel.value(true),
-                channel.value(true)
-            )
+                //
+                //MODULE: MINIMAP2_ALIGN
+                //
+
+                MINIMAP2_ALIGN(
+                    ch_minimap2_align.first_ch,
+                    ch_minimap2_align.second_ch,
+                    channel.value(false),
+                    channel.value("bai"),
+                    channel.value(true),
+                    channel.value(true)
+                )
+           }
+
+           if(params.galignment_tool == "mummer" ){
+                   
+                   //
+                   // MODULE: MUMMER
+                   //
+
+                ch_minimap2_align.first_ch
+                    .join(ch_minimap2_align.second_ch)
+                    .set{ ch_mummer }
+                
+                ch_mummer.view()
+
+                MUMMER(
+                    ch_mummer
+                )
+
+            }
 
         
         }
