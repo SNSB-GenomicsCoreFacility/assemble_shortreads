@@ -17,6 +17,9 @@ include { QUAST                                } from '../modules/nf-core/quast/
 include { MINIMAP2_ALIGN                       } from '../modules/nf-core/minimap2/align/main'
 include { MUMMER                               } from '../modules/nf-core/mummer/main'
 include { BWAMEM2_INDEX                        } from '../modules/nf-core/bwamem2/index/main'
+include { BWAMEM2_INDEX as BWAMEM2_INDEX_CONS  } from '../modules/nf-core/bwamem2/index/main'
+include { BWAMEM2_MEM                          } from '../modules/nf-core/bwamem2/mem/main'
+include { SAMTOOLS_CONSENSUS                   } from '../modules/nf-core/samtools/consensus/main'
 include { paramsSummaryMap                     } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc                 } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML               } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -229,8 +232,19 @@ workflow ASSEMBLE_SHORTREADS {
                 MUMMER(
                     ch_mummer
                 )
+            }
 
             if(params.consensus_fasta==true){
+
+                BBMAP_REPAIR.out.repaired.map{meta,reads ->
+                        def new_id = meta.id.replaceFirst(/_adapter_filtered_dedup_pardre$/,'')
+                        def new_meta = [:]
+                        new_meta.id = new_id
+                        [new_meta,reads]
+                    }
+                    .set{nmeta_reads}
+
+                nmeta_reads.view()
 
                 if(params.reference_fasta.endsWith(".map")){
                     // Read the CSV and parse rows into maps
@@ -262,9 +276,45 @@ workflow ASSEMBLE_SHORTREADS {
                     )
 
                     prech_ref_with_idx = cp_ref_without_idx.join(BWAMEM2_INDEX.out.index)
+                    cp_ref_with_idx.concat(prech_ref_with_idx).set{ch_sample_ref_idx}
 
+                    ch_sample_ref_idx.join(nmeta_reads).multiMap{ meta, ref, idx, reads ->
+                        first_ch: [meta, reads]
+                        second_ch: [meta, idx]
+                        third_ch: [meta, ref]
+                    }.set{ch_bwamem2_mem}
                 }
-            }
+
+                else{
+                    if(params.reference_bwaidx){
+                            reference_bwaidx = Channel.fromPath(params.reference_bwaidx)
+                            prech_reference_bwaidx = reference_bwaidx.map{idx->tuple([id:"reference"],idx)}
+                            prech_reference_fasta_idx = prech_reference_fasta.join(prech_reference_bwaidx)
+                        }
+                    else{
+                         BWAMEM2_INDEX_CONS(
+                            prech_reference_fasta
+                         )
+                         prech_reference_fasta_idx = prech_reference_fasta.join(BWAMEM2_INDEX_CONS.out.index)
+                    }
+                    prech_reference_fasta_idx.combine(nmeta_reads).multiMap{meta, ref, idx, metar, reads ->
+                    first_ch: [metar, reads]
+                    second_ch: [metar, idx]
+                    third_ch: [metar, ref]
+                    }.set{ch_bwamem2_mem}
+                }
+                
+
+                BWAMEM2_MEM(
+                    ch_bwamem2_mem.first_ch,
+                    ch_bwamem2_mem.second_ch,
+                    ch_bwamem2_mem.third_ch,
+                    channel.value(true)
+                )
+
+                SAMTOOLS_CONSENSUS(
+                    BWAMEM2_MEM.out.bam
+                )
 
             }
 

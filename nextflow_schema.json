@@ -270,6 +270,16 @@
         "dup_calc_accuracy": {
             "type": "integer",
             "default": 6
+        },
+        "reference_bwaidx": {
+            "type": "string"
+        },
+        "consensus_fasta": {
+            "type": "boolean"
+        },
+        "galignment_tool": {
+            "type": "string",
+            "default": "minimap2"
         }
     }
 }
