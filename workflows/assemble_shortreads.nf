@@ -16,6 +16,7 @@ include { SPADES                               } from '../modules/nf-core/spades
 include { QUAST                                } from '../modules/nf-core/quast/main'
 include { MINIMAP2_ALIGN                       } from '../modules/nf-core/minimap2/align/main'
 include { MUMMER                               } from '../modules/nf-core/mummer/main'
+include { BWAMEM2_INDEX                        } from '../modules/nf-core/bwamem2/index/main'
 include { paramsSummaryMap                     } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc                 } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML               } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -224,11 +225,46 @@ workflow ASSEMBLE_SHORTREADS {
                     .join(ch_minimap2_align.second_ch)
                     .set{ ch_mummer }
                 
-                ch_mummer.view()
 
                 MUMMER(
                     ch_mummer
                 )
+
+            if(params.consensus_fasta==true){
+
+                if(params.reference_fasta.endsWith(".map")){
+                    // Read the CSV and parse rows into maps
+                    Channel
+                        .fromPath(params.reference_fasta)
+                        .splitCsv(header:true)
+                        .map { row -> 
+                            [ 
+                                sample: row.sample, 
+                                reference: row.reference, 
+                                reference_idx: row.reference_idx 
+                            ]
+                        }
+                        .branch{it -> 
+                            withIdx: it.reference_idx != "none"  
+                            withoutIdx: it.reference_idx == "none"
+                        }.set{ref}
+
+                    cp_ref_without_idx = ref.withoutIdx.map{it->tuple([id:it.sample],it.reference)}
+                    cp_ref_with_idx = ref.withIdx.map{it->tuple([id:it.sample],it.reference,it.reference_idx)}
+
+
+                    //
+                    //BWAMEM2_INDEX
+                    //
+
+                    BWAMEM2_INDEX(
+                        cp_ref_without_idx
+                    )
+
+                    prech_ref_with_idx = cp_ref_without_idx.join(BWAMEM2_INDEX.out.index)
+
+                }
+            }
 
             }
 
