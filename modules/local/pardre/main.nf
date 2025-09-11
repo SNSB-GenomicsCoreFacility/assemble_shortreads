@@ -6,9 +6,11 @@ process PARDRE {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/pardre:2.2.5--h2aad775_4':
         'biocontainers/pardre:2.2.5--h2aad775_4' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:// TODO nf-core: Where applicable all sample-specific information e.g. "id", "single_end", "read_group"
     tuple val(meta), path(reads)
+    val (index_out)
 
     output:
     tuple val(meta), path("*.gz"), emit: reads

@@ -4,9 +4,13 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 include { FASTQC                               } from '../modules/nf-core/fastqc/main'
+include { MULTIQC_LOCAL as RAWFASTQCMULTIQC    } from '../modules/local/multiqc/local/main'
 include { FASTQC as ADAPTERFILTERFASTQC        } from '../modules/nf-core/fastqc/main'
+include { MULTIQC_LOCAL as ADFILFASTQCMULTIQC  } from '../modules/local/multiqc/local/main'
 include { FASTQC as DEDUPFASTQC                } from '../modules/nf-core/fastqc/main'
+include { MULTIQC_LOCAL as DEDUPFASTQCMULTIQC  } from '../modules/local/multiqc/local/main'
 include { FASTQC as REPAIREDFASTQC             } from '../modules/nf-core/fastqc/main'
+include { MULTIQC_LOCAL as REPFASTQCMULTIQC    } from '../modules/local/multiqc/local/main'
 include { MULTIQC                              } from '../modules/nf-core/multiqc/main'
 include { BBMAP_BBDUK                          } from '../modules/nf-core/bbmap/bbduk/main'
 include { BBMAP_REPAIR                         } from '../modules/nf-core/bbmap/repair/main'
@@ -14,6 +18,7 @@ include { FASTP                                } from '../modules/nf-core/fastp/
 include { PARDRE                               } from '../modules/local/pardre/main'
 include { SPADES                               } from '../modules/nf-core/spades/main'
 include { QUAST                                } from '../modules/nf-core/quast/main'
+include { MULTIQC_LOCAL as QUASTMULTIQC        } from '../modules/local/multiqc/local/main'
 include { MINIMAP2_ALIGN                       } from '../modules/nf-core/minimap2/align/main'
 include { MUMMER                               } from '../modules/nf-core/mummer/main'
 include { BWAMEM2_INDEX                        } from '../modules/nf-core/bwamem2/index/main'
@@ -43,11 +48,18 @@ workflow ASSEMBLE_SHORTREADS {
     // MODULE: Run FastQC
     //
     FASTQC (
-        ch_samplesheet
+        ch_samplesheet,
+        Channel.value("1.raw_fastqc")
     )
+
+
     ch_multiqc_files = ch_multiqc_files.mix(FASTQC.out.zip.collect{it[1]})
     ch_versions = ch_versions.mix(FASTQC.out.versions.first())
 
+    RAWFASTQCMULTIQC(
+        FASTQC.out.zip.collect{it[1]},
+        Channel.value("2.raw_fastqc_multiqc")
+    )
     // read adapter fasta files 
 
     fasta_adapter=Channel.fromPath(params.reference_adapter_fas,checkIfExists: true)
@@ -70,7 +82,8 @@ workflow ASSEMBLE_SHORTREADS {
         //
         BBMAP_BBDUK(
             ch_adapter_files.first_ch,
-            ch_adapter_files.second_ch
+            ch_adapter_files.second_ch,
+            Channel.value("3.bbmap_bbduk")
          )
         ch_multiqc_files = ch_multiqc_files.mix(BBMAP_BBDUK.out.log.collect{it[1]})
         ch_versions = ch_versions.mix(BBMAP_BBDUK.out.versions.first())
@@ -86,7 +99,8 @@ workflow ASSEMBLE_SHORTREADS {
             ch_adapter_files.second_ch,
             Channel.value(false),
             Channel.value(false),
-            Channel.value(false)
+            Channel.value(false),
+            Channel.value("3.fastp")
         )
         ch_multiqc_files = ch_multiqc_files.mix(FASTP.out.json.collect{it[1]})
         ch_versions = ch_versions.mix(FASTP.out.versions.first())
@@ -97,16 +111,26 @@ workflow ASSEMBLE_SHORTREADS {
         // MODULE: ADAPTER_FILTER_FASTQC
         //
         ADAPTERFILTERFASTQC(
-            ch_adapter_fastqc
+            ch_adapter_fastqc,
+            Channel.value("4.adapterfilt_fastqc")
         )
 
         ch_multiqc_files = ch_multiqc_files.mix(ADAPTERFILTERFASTQC.out.zip.collect{it[1]})
 
         //
+        // MODULE: ADFILFASTQCMULTIQC
+        //
+        ADFILFASTQCMULTIQC(
+            ADAPTERFILTERFASTQC.out.zip.collect{it[1]},
+            Channel.value("5.adapterfilt_fastqc_multiqc")
+        )
+
+        //
         // MODULE : PARDRE
         //
         PARDRE(
-            ch_adapter_fastqc
+            ch_adapter_fastqc,
+            Channel.value("6.pardre")
         )
         
         ch_versions = ch_versions.mix(PARDRE.out.versions.first())
@@ -121,18 +145,28 @@ workflow ASSEMBLE_SHORTREADS {
         //MODULE: DEDUPFASTQC
         //
         DEDUPFASTQC(
-            ch_pardre_reads
+            ch_pardre_reads,
+            channel.value("7.adapterfilt_dedup_fastqc")
         )
 
         ch_multiqc_files = ch_multiqc_files.mix(DEDUPFASTQC.out.zip.collect{it[1]})
-    
+
+        //
+        // MODULE: DEDUPFASTQCMULTIQC
+        //
+        
+        DEDUPFASTQCMULTIQC(
+            DEDUPFASTQC.out.zip.collect{it[1]},
+            channel.value("8.adapterfilt_dedup_fastqc_multiqc")
+        )
 
         //
         //MODULE: BBMAP_REPAIR
         //
         BBMAP_REPAIR(
             ch_pardre_reads,
-            channel.value(false)
+            channel.value(false),
+            channel.value("9.bbmap_repair")
         )
 
         BBMAP_REPAIR.out.repaired.map{
@@ -143,9 +177,18 @@ workflow ASSEMBLE_SHORTREADS {
         //MODULE: REPAIREDFASTQC
         //
         REPAIREDFASTQC(
-            ch_bbmap_repaired_reads
+            ch_bbmap_repaired_reads,
+            Channel.value("10.adapterfilt_dedup_repaired_fastqc")
         )
         ch_multiqc_files = ch_multiqc_files.mix(REPAIREDFASTQC.out.zip.collect{it[1]})
+
+        //
+        //MODULE: REPFASTQCMULTIQC
+        //
+        REPFASTQCMULTIQC(
+            REPAIREDFASTQC.out.zip.collect{it[1]},
+            Channel.value("11.adapterfilt_dedup_repaired_fastqc_multiqc")
+        )
 
         //
         //MODULE: SPADES
@@ -153,7 +196,8 @@ workflow ASSEMBLE_SHORTREADS {
         SPADES(
             ch_bbmap_repaired_reads.map{meta,reads->tuple(meta,reads,[],[])},
             [],
-            []
+            [],
+            Channel.value("12.spades")
         )
 
         if(params.reference_fasta){
@@ -191,7 +235,6 @@ workflow ASSEMBLE_SHORTREADS {
 
             prech_scaffolds_fasta = SPADES.out.scaffolds.map{meta, scaffolds -> tuple([id:meta.id]+[single_end:"false"],scaffolds)}
 
-            //MODULE: MINIMAP2_ALIGN
 
 
                 prech_minimap2_align = prech_scaffolds_fasta.combine(prech_reference_fasta)
@@ -214,7 +257,8 @@ workflow ASSEMBLE_SHORTREADS {
                     channel.value(false),
                     channel.value("bai"),
                     channel.value(true),
-                    channel.value(true)
+                    channel.value(true),
+                    Channel.value("13.minimap2_align")
                 )
            }
 
@@ -230,7 +274,8 @@ workflow ASSEMBLE_SHORTREADS {
                 
 
                 MUMMER(
-                    ch_mummer
+                    ch_mummer,
+                    Channel.value("13.mummer")
                 )
             }
 
@@ -272,7 +317,8 @@ workflow ASSEMBLE_SHORTREADS {
                     //
 
                     BWAMEM2_INDEX(
-                        cp_ref_without_idx
+                        cp_ref_without_idx,
+                        Channel.value("14.bwamem2_index")
                     )
 
                     prech_ref_with_idx = cp_ref_without_idx.join(BWAMEM2_INDEX.out.index)
@@ -292,8 +338,12 @@ workflow ASSEMBLE_SHORTREADS {
                             prech_reference_fasta_idx = prech_reference_fasta.join(prech_reference_bwaidx)
                         }
                     else{
+                        //
+                        // MODULE: BWAMEM2_INDEX_CONS
+                        //
                          BWAMEM2_INDEX_CONS(
-                            prech_reference_fasta
+                            prech_reference_fasta,
+                            channel.value("15.bwamem2_index_cons")
                          )
                          prech_reference_fasta_idx = prech_reference_fasta.join(BWAMEM2_INDEX_CONS.out.index)
                     }
@@ -309,11 +359,13 @@ workflow ASSEMBLE_SHORTREADS {
                     ch_bwamem2_mem.first_ch,
                     ch_bwamem2_mem.second_ch,
                     ch_bwamem2_mem.third_ch,
-                    channel.value(true)
+                    channel.value(true),
+                    channel.value("16.bwamem2_mem")
                 )
 
                 SAMTOOLS_CONSENSUS(
-                    BWAMEM2_MEM.out.bam
+                    BWAMEM2_MEM.out.bam,
+                    channel.value("17.samtools_consensus")
                 )
 
             }
@@ -325,11 +377,29 @@ workflow ASSEMBLE_SHORTREADS {
 
         ch_quast = prech_quast.map{assemblies->tuple([id:"consensus"],assemblies)}
 
+        //
+        // MODULE: QUAST
+        //
+
         QUAST(
             ch_quast,
             [[],[]],
-            [[],[]]
+            [[],[]],
+            channel.value("18.quast")
         )
+
+        //
+        //MODULE : QUASTMULTIQC
+        //
+
+        QUASTMULTIQC(
+            QUAST.out.tsv.map{it[1]}.combine(QUAST.out.results.collect{it[1]}),
+            channel.value("19.quast_multiqc")
+        )
+
+        ch_multiqc_files = ch_multiqc_files.mix(QUAST.out.tsv.collect{it[1]})
+        ch_multiqc_files = ch_multiqc_files.mix(QUAST.out.results.collect{it[1]})
+        ch_versions = ch_versions.mix(QUAST.out.versions.first())
 
     //
     // Collate and save software versions

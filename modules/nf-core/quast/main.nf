@@ -6,11 +6,13 @@ process QUAST {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/a5/a515d04307ea3e0178af75132105cd36c87d0116c6f9daecf81650b973e870fd/data' :
         'community.wave.seqera.io/library/quast:5.3.0--755a216045b6dbdd' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:
     tuple val(meta) , path(consensus)
     tuple val(meta2), path(fasta)
     tuple val(meta3), path(gff)
+    val (index_out)
 
     output:
     tuple val(meta), path("${prefix}")                   , emit: results

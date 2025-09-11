@@ -6,9 +6,11 @@ process SAMTOOLS_CONSENSUS {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/samtools:1.21--h50ea8bc_0' :
         'biocontainers/samtools:1.21--h50ea8bc_0' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:
     tuple val(meta), path(input)
+    val (index_out)
 
     output:
     tuple val(meta), path("*.fasta") , emit: fasta , optional: true

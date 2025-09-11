@@ -7,9 +7,11 @@ process MUMMER {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/mummer:3.23--pl5262h1b792b2_12' :
         'biocontainers/mummer:3.23--pl5262h1b792b2_12' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:
     tuple val(meta), path(ref), path(query)
+    val(index_out)
 
     output:
     tuple val(meta), path("*.coords"), emit: coords
