@@ -7,6 +7,7 @@ process MINIMAP2_ALIGN {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/66/66dc96eff11ab80dfd5c044e9b3425f52d818847b9c074794cf0c02bfa781661/data' :
         'community.wave.seqera.io/library/minimap2_samtools:33bb43c18d22e29c' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:
     tuple val(meta), path(reads)
@@ -15,6 +16,7 @@ process MINIMAP2_ALIGN {
     val bam_index_extension
     val cigar_paf_format
     val cigar_bam
+    val (index_out)
 
     output:
     tuple val(meta), path("*.paf")                       , optional: true, emit: paf

@@ -6,9 +6,11 @@ process FASTQC {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/fastqc:0.12.1--hdfd78af_0' :
         'biocontainers/fastqc:0.12.1--hdfd78af_0' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:
     tuple val(meta), path(reads)
+    val(index_out)
 
     output:
     tuple val(meta), path("*.html"), emit: html

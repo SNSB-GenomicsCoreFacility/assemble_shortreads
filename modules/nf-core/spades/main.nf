@@ -1,16 +1,19 @@
 process SPADES {
     tag "$meta.id"
     label 'process_high'
+    maxForks 2
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/7b/7b7b68c7f8471d9111841dbe594c00a41cdd3b713015c838c4b22705cfbbdfb2/data' :
         'community.wave.seqera.io/library/spades:4.1.0--77799c52e1d1054a' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:
     tuple val(meta), path(illumina), path(pacbio), path(nanopore)
     path yml
     path hmm
+    val(index_out)
 
     output:
     tuple val(meta), path('*.scaffolds.fa.gz')    , optional:true, emit: scaffolds

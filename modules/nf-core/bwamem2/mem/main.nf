@@ -6,12 +6,14 @@ process BWAMEM2_MEM {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/9a/9ac054213e67b3c9308e409b459080bbe438f8fd6c646c351bc42887f35a42e7/data' :
         'community.wave.seqera.io/library/bwa-mem2_htslib_samtools:e1f420694f8e42bd' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:
     tuple val(meta), path(reads)
     tuple val(meta2), path(index)
     tuple val(meta3), path(fasta)
     val   sort_bam
+    val (index_out)
 
     output:
     tuple val(meta), path("*.sam")  , emit: sam , optional:true

@@ -6,6 +6,7 @@ process FASTP {
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/88/889a182b8066804f4799f3808a5813ad601381a8a0e3baa4ab8d73e739b97001/data' :
         'community.wave.seqera.io/library/fastp:0.24.0--62c97b06e8447690' }"
+    publishDir("${params.outdir}/${index_out}", mode:'copy')
 
     input:
     tuple val(meta), path(reads)
@@ -13,6 +14,7 @@ process FASTP {
     val   discard_trimmed_pass
     val   save_trimmed_fail
     val   save_merged
+    val (index_out)
 
     output:
     tuple val(meta), path('*.fastp.fastq.gz') , optional:true, emit: reads
