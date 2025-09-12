@@ -289,7 +289,6 @@ workflow ASSEMBLE_SHORTREADS {
                     }
                     .set{nmeta_reads}
 
-                nmeta_reads.view()
 
                 if(params.reference_fasta.endsWith(".map")){
                     // Read the CSV and parse rows into maps
